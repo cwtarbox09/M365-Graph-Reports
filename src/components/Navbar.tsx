@@ -8,9 +8,10 @@ interface Props {
   userName?: string;
   userEmail?: string;
   onSignOut: () => void;
+  isImportedData?: boolean;
 }
 
-export default function Navbar({ userName, userEmail, onSignOut }: Props) {
+export default function Navbar({ userName, userEmail, onSignOut, isImportedData }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -66,6 +67,9 @@ export default function Navbar({ userName, userEmail, onSignOut }: Props) {
                             border border-slate-200 py-1 z-50">
               <div className="px-3 py-2 border-b border-slate-100">
                 <p className="text-xs text-slate-500 truncate">{userEmail}</p>
+                {isImportedData && (
+                  <p className="text-xs text-amber-600 font-medium mt-1">📁 Imported Data</p>
+                )}
               </div>
               <button
                 onClick={() => { onSignOut(); setOpen(false); }}
@@ -73,7 +77,7 @@ export default function Navbar({ userName, userEmail, onSignOut }: Props) {
                            hover:bg-slate-50 transition-colors"
               >
                 <LogOut className="w-4 h-4 text-slate-400" />
-                Sign out
+                {isImportedData ? 'Clear Data' : 'Sign out'}
               </button>
             </div>
           )}
