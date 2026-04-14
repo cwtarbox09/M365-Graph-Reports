@@ -18,7 +18,8 @@ import {
 } from './ComplianceChart';
 import FilterBar from './FilterBar';
 import SignInTable from './SignInTable';
-import { AlertCircle, Loader2, RefreshCw, Shield } from 'lucide-react';
+import CSVImportModal from './CSVImportModal';
+import { AlertCircle, Loader2, RefreshCw, Shield, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MSAL_CONFIG, GRAPH_SCOPES } from '@/lib/msalConfig';
 
@@ -194,6 +195,10 @@ export default function Dashboard() {
   const [filters, setFilters]         = useState<FilterState>(DEFAULT_FILTERS);
   const abortRef                      = useRef<AbortController | null>(null);
 
+  // ── CSV Import state ───────────────────────────────────────────────────────
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
+  const [isImportedData, setIsImportedData] = useState(false);
+
   // ── Init MSAL on mount ─────────────────────────────────────────────────────
   useEffect(() => {
     getMsal()
@@ -259,6 +264,16 @@ export default function Dashboard() {
     setAccount(null);
     setSignIns([]);
   }, [account]);
+
+  // ── CSV Import handler ─────────────────────────────────────────────────────
+  const handleCSVImport = useCallback((importedSignIns: SignInLog[]) => {
+    setSignIns(importedSignIns);
+    setIsInitial(false);
+    setHasMore(false);
+    setNextLink(null);
+    setIsImportedData(true);
+    setError(null);
+  }, []);
 
   // ── Data fetching (direct Graph API calls) ────────────────────────────────
   const loadData = useCallback(async (days: number) => {
@@ -395,7 +410,8 @@ export default function Dashboard() {
   );
 
   // ── Not signed in → sign-in screen ────────────────────────────────────────
-  if (!account) return (
+  if (!account && !isImportedData) {
+    return (
     <div className="min-h-screen flex">
       {/* Left panel */}
       <div className="hidden lg:flex flex-col justify-between w-1/2 bg-gradient-to-br
@@ -465,18 +481,55 @@ export default function Dashboard() {
             </svg>
             Sign in with Microsoft
           </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-6">
+            <div className="flex-1 h-px bg-slate-300" />
+            <p className="text-xs text-slate-500 font-medium">OR</p>
+            <div className="flex-1 h-px bg-slate-300" />
+          </div>
+
+          {/* CSV Import button */}
+          <button
+            onClick={() => setCsvImportOpen(true)}
+            className="w-full flex items-center justify-center gap-3 bg-slate-100 border
+                       border-slate-300 rounded-lg px-4 py-3 text-sm font-medium
+                       text-slate-700 hover:bg-slate-200 active:bg-slate-300
+                       transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            Import CSV Data
+          </button>
+          <p className="text-xs text-slate-500 text-center mt-2">
+            Load previously exported sign-in data
+          </p>
         </div>
       </div>
+
+      {/* CSV Import Modal */}
+      <CSVImportModal
+        isOpen={csvImportOpen}
+        onClose={() => setCsvImportOpen(false)}
+        onImport={handleCSVImport}
+      />
     </div>
-  );
+    );
+  }
 
   // ── Authenticated: full dashboard ─────────────────────────────────────────
+  const handleClearData = useCallback(() => {
+    setSignIns([]);
+    setIsImportedData(false);
+    setIsInitial(true);
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Navbar
-        userName={account.name}
-        userEmail={account.username}
-        onSignOut={handleSignOut}
+        userName={account?.name || (isImportedData ? 'Imported Data' : undefined)}
+        userEmail={account?.username || (isImportedData ? '(No authentication)' : undefined)}
+        onSignOut={isImportedData ? handleClearData : handleSignOut}
+        isImportedData={isImportedData}
       />
 
       <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5">

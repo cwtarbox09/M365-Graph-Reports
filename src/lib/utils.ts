@@ -162,6 +162,135 @@ export function computeStats(signIns: SignInLog[]): DashboardStats {
   };
 }
 
+// ─── CSV import ───────────────────────────────────────────────────────────────
+
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let insideQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+
+    if (char === '"') {
+      if (insideQuotes && nextChar === '"') {
+        current += '"';
+        i++;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+    } else if (char === ',' && !insideQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  result.push(current.trim());
+  return result;
+}
+
+export function parseCSV(csvContent: string): SignInLog[] {
+  const lines = csvContent.split('\n').filter(l => l.trim());
+  if (lines.length < 2) throw new Error('CSV file is empty or invalid');
+
+  const headers = parseCSVLine(lines[0]);
+  const expectedHeaders = [
+    'DateTime', 'User', 'UPN', 'Application', 'Client App',
+    'Device Name', 'OS', 'Trust Type', 'Intune Managed', 'Compliant',
+    'Policy Status', 'Sign-in Status', 'Failure Reason',
+    'CA Status', 'Risk Level', 'IP Address', 'City', 'Country',
+  ];
+
+  // Validate headers
+  if (headers.length < expectedHeaders.length) {
+    throw new Error('CSV format is invalid. Missing required columns.');
+  }
+
+  const headerMap: Record<string, number> = {};
+  expectedHeaders.forEach((header, idx) => {
+    headerMap[header] = idx;
+  });
+
+  const signIns: SignInLog[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCSVLine(lines[i]);
+    if (values.every(v => !v)) continue; // Skip empty lines
+
+    try {
+      const getString = (header: string) => values[headerMap[header]] || '';
+      const getBoolean = (header: string) => {
+        const val = values[headerMap[header]]?.toLowerCase();
+        if (val === 'true') return true;
+        if (val === 'false') return false;
+        if (val === 'n/a' || val === '') return null;
+        return null;
+      };
+
+      // Parse Trust Type back to original values
+      const trustTypeLabel = getString('Trust Type');
+      let trustType: string | null = null;
+      if (trustTypeLabel === 'Entra Joined') trustType = 'AzureAD';
+      else if (trustTypeLabel === 'Hybrid Entra Joined') trustType = 'ServerAD';
+      else if (trustTypeLabel === 'Registered (Workplace)') trustType = 'Workplace';
+
+      // Parse sign-in status
+      const signInStatus = getString('Sign-in Status');
+      const errorCode = signInStatus === 'Failure' ? 1 : 0;
+
+      const deviceDetail: DeviceDetail = {
+        deviceId: 'imported-' + Math.random().toString(36).substr(2, 9),
+        displayName: getString('Device Name') || null,
+        operatingSystem: getString('OS') || null,
+        browser: null,
+        isCompliant: getBoolean('Compliant'),
+        isManaged: getBoolean('Intune Managed'),
+        trustType,
+      };
+
+      const signInLog: SignInLog = {
+        id: 'imported-' + Math.random().toString(36).substr(2, 9),
+        createdDateTime: getString('DateTime'),
+        userDisplayName: getString('User'),
+        userPrincipalName: getString('UPN'),
+        appDisplayName: getString('Application'),
+        clientAppUsed: getString('Client App'),
+        ipAddress: getString('IP Address'),
+        location: {
+          city: getString('City') ? getString('City') : null,
+          state: null,
+          countryOrRegion: getString('Country') ? getString('Country') : null,
+        },
+        deviceDetail,
+        status: {
+          errorCode,
+          failureReason: getString('Failure Reason') ? getString('Failure Reason') : null,
+          additionalDetails: null,
+        },
+        conditionalAccessStatus: getString('CA Status'),
+        riskLevelAggregated: getString('Risk Level') || 'none',
+        isInteractive: true,
+        policyStatus: 'unknown',
+        deviceCategory: 'no-device',
+      };
+
+      // Recompute policy status and device category
+      signInLog.policyStatus = getPolicyStatus(signInLog.deviceDetail);
+      signInLog.deviceCategory = getDeviceCategory(signInLog.deviceDetail);
+
+      signIns.push(signInLog);
+    } catch (err) {
+      console.warn(`Failed to parse row ${i + 1}:`, err);
+    }
+  }
+
+  if (signIns.length === 0) throw new Error('No valid sign-in records found in CSV');
+  return signIns;
+}
+
 // ─── CSV export ───────────────────────────────────────────────────────────────
 
 export function exportToCSV(signIns: SignInLog[], filename = 'signin-report.csv') {
