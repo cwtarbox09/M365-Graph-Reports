@@ -33,18 +33,18 @@ export function getDeviceCategory(deviceDetail: DeviceDetail | null): DeviceCate
 
 /**
  * Returns whether the sign-in would pass the target CA policy:
- *  "Device must be Entra joined, Hybrid Entra joined, OR enrolled in Intune."
+ *  "Device must be Entra joined, Hybrid Entra joined, OR compliant."
  */
 export function getPolicyStatus(deviceDetail: DeviceDetail | null): PolicyStatus {
   if (!deviceDetail || !deviceDetail.deviceId) return 'fails';
 
   const isEntraJoined = deviceDetail.trustType === 'AzureAD';
   const isHybridJoined = deviceDetail.trustType === 'ServerAD';
-  const isIntuneEnrolled = deviceDetail.isManaged === true;
+  const isCompliant = deviceDetail.isCompliant === true;
 
-  if (isEntraJoined || isHybridJoined || isIntuneEnrolled) return 'passes';
+  if (isEntraJoined || isHybridJoined || isCompliant) return 'passes';
 
-  // Has a device ID but meets none of the criteria (e.g. Workplace, isManaged=false)
+  // Has a device ID but meets none of the criteria (e.g. Workplace, not compliant)
   return 'fails';
 }
 

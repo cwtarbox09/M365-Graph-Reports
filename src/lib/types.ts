@@ -29,7 +29,7 @@ export interface SignInStatus {
 }
 
 /**
- * passes  – device is Entra joined, Hybrid Entra joined, or Intune enrolled
+ * passes  – device is Entra joined, Hybrid Entra joined, or compliant
  * fails   – device has no info or partial info but doesn't meet any policy criterion
  * unknown – (deprecated) no longer returned; kept for backwards compatibility
  */
