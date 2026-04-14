@@ -203,18 +203,30 @@ export default function Dashboard() {
   useEffect(() => {
     getMsal()
       .then(async instance => {
-        // Must call handleRedirectPromise to process the auth result after loginRedirect returns
-        const result = await instance.handleRedirectPromise();
-        if (result?.account) {
-          setAccount(result.account);
-        } else {
-          const accounts = instance.getAllAccounts();
-          if (accounts.length > 0) setAccount(accounts[0]);
+        try {
+          // Must call handleRedirectPromise to process the auth result after loginRedirect returns
+          const result = await instance.handleRedirectPromise();
+
+          // Check if redirect result contains an error
+          if (result?.account) {
+            setAccount(result.account);
+          } else {
+            const accounts = instance.getAllAccounts();
+            if (accounts.length > 0) setAccount(accounts[0]);
+          }
+        } catch (err: unknown) {
+          // Handle errors from redirect promise processing
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          // Ignore user cancellation errors
+          if (!errorMsg.includes('user_cancelled')) {
+            setAuthError(`Authentication initialisation failed: ${errorMsg}`);
+          }
         }
         setMsalReady(true);
       })
-      .catch((err: Error) => {
-        setAuthError(`Authentication initialisation failed: ${err.message}`);
+      .catch((err: unknown) => {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        setAuthError(`Authentication initialisation failed: ${errorMsg}`);
         setMsalReady(true);
       });
   }, []);
@@ -229,8 +241,16 @@ export default function Dashboard() {
       return result.accessToken;
     } catch (e) {
       if (e instanceof InteractionRequiredAuthError) {
-        // Use redirect instead of popup to avoid nested popup errors
-        await instance.acquireTokenRedirect({ scopes: GRAPH_SCOPES });
+        try {
+          // Use redirect instead of popup to avoid nested popup errors
+          await instance.acquireTokenRedirect({ scopes: GRAPH_SCOPES });
+        } catch (redirectErr: unknown) {
+          const errorMsg = redirectErr instanceof Error ? redirectErr.message : String(redirectErr);
+          // Ignore user cancellation errors
+          if (!errorMsg.includes('user_cancelled')) {
+            throw new Error(`Token acquisition failed: ${errorMsg}`);
+          }
+        }
         // Note: acquireTokenRedirect will redirect and return, code below won't execute
         throw new Error('Token acquisition requires redirect');
       }
@@ -245,8 +265,8 @@ export default function Dashboard() {
       const instance = await getMsal();
       // Use loginRedirect instead of loginPopup to avoid nested popup issues
       await instance.loginRedirect({ scopes: GRAPH_SCOPES });
-    } catch (e) {
-      const err = e as Error;
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e : new Error(String(e));
       if (err.name !== 'BrowserAuthError' || !err.message.includes('user_cancelled')) {
         setAuthError(`Sign-in failed: ${err.message}`);
       }
