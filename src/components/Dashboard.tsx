@@ -295,6 +295,12 @@ export default function Dashboard() {
     setError(null);
   }, []);
 
+  const handleClearData = useCallback(() => {
+    setSignIns([]);
+    setIsImportedData(false);
+    setIsInitial(true);
+  }, []);
+
   // ── Data fetching (direct Graph API calls) ────────────────────────────────
   const loadData = useCallback(async (days: number) => {
     if (abortRef.current) abortRef.current.abort();
@@ -537,12 +543,6 @@ export default function Dashboard() {
   }
 
   // ── Authenticated: full dashboard ─────────────────────────────────────────
-  const handleClearData = useCallback(() => {
-    setSignIns([]);
-    setIsImportedData(false);
-    setIsInitial(true);
-  }, []);
-
   return (
     <div className="min-h-screen bg-slate-50">
       <Navbar
