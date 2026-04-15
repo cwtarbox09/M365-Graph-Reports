@@ -96,3 +96,22 @@ export interface SignInsApiResponse {
   nextLink: string | null;
 }
 
+// ─── Subscribed SKU (license) types ──────────────────────────────────────────
+
+export interface PrepaidUnits {
+  enabled: number;
+  suspended: number;
+  warning: number;
+  lockedOut: number;
+}
+
+export interface SubscribedSku {
+  id: string;
+  skuId: string;
+  skuPartNumber: string;
+  /** Capability status: Enabled | Warning | Suspended | Deleted | LockedOut */
+  capabilityStatus: string;
+  consumedUnits: number;
+  prepaidUnits: PrepaidUnits;
+}
+

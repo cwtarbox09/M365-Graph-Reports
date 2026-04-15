@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { DeviceDetail, DeviceCategory, PolicyStatus, SignInLog, DashboardStats } from './types';
+import { DeviceDetail, DeviceCategory, PolicyStatus, SignInLog, DashboardStats, SubscribedSku } from './types';
 
 // ─── Tailwind class helper ────────────────────────────────────────────────────
 
@@ -351,6 +351,172 @@ export function exportToCSV(signIns: SignInLog[], filename = 'signin-report.csv'
     escape(s.location.countryOrRegion),
   ].join(','));
 
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── M365 license SKU name mapping ───────────────────────────────────────────
+
+/**
+ * Maps raw Microsoft 365 SKU part numbers (e.g. "ENTERPRISEPACK") to their
+ * friendly commercial display names (e.g. "Office 365 E3").
+ */
+const M365_SKU_NAMES: Record<string, string> = {
+  // ── Microsoft 365 Business ──────────────────────────────────────────────
+  'O365_BUSINESS_ESSENTIALS':             'Microsoft 365 Business Basic',
+  'SMB_BUSINESS':                          'Microsoft 365 Apps for Business',
+  'SMB_BUSINESS_ESSENTIALS':              'Microsoft 365 Business Basic',
+  'SMB_BUSINESS_PREMIUM':                 'Microsoft 365 Business Standard',
+  'SPB':                                   'Microsoft 365 Business Premium',
+  'O365_BUSINESS':                         'Microsoft 365 Apps for Business',
+  'O365_BUSINESS_PREMIUM':                'Microsoft 365 Business Standard',
+
+  // ── Microsoft 365 Enterprise ────────────────────────────────────────────
+  'SPE_E3':                                'Microsoft 365 E3',
+  'SPE_E5':                                'Microsoft 365 E5',
+  'SPE_E3_USGOV_DOD':                     'Microsoft 365 E3 (DoD)',
+  'SPE_E3_USGOV_GCCHIGH':                 'Microsoft 365 E3 (GCC High)',
+  'SPE_E5_USGOV_DOD':                     'Microsoft 365 E5 (DoD)',
+  'SPE_E5_USGOV_GCCHIGH':                 'Microsoft 365 E5 (GCC High)',
+  'SPE_F1':                                'Microsoft 365 F1',
+  'M365_F1':                               'Microsoft 365 F1',
+  'DESKLESSPACK':                          'Microsoft 365 F3',
+  'DESKLESSWOFFPACK':                      'Office 365 F3',
+  'IDENTITY_THREAT_PROTECTION':           'Microsoft 365 E5 Security',
+  'IDENTITY_THREAT_PROTECTION_FOR_EMS_E5': 'Microsoft 365 E5 Security for EMS E5',
+
+  // ── Office 365 Enterprise ───────────────────────────────────────────────
+  'STANDARDPACK':                          'Office 365 E1',
+  'STANDARDWOFFPACK':                      'Office 365 E2',
+  'ENTERPRISEPACK':                        'Office 365 E3',
+  'ENTERPRISEWITHSCAL':                    'Office 365 E4',
+  'ENTERPRISEPREMIUM':                     'Office 365 E5',
+  'ENTERPRISEPREMIUM_NOPSTNCONF':         'Office 365 E5 (No Audio Conferencing)',
+  'MIDSIZEPACK':                           'Office 365 Midsize Business',
+
+  // ── Office 365 Education ────────────────────────────────────────────────
+  'STANDARDPACK_STUDENT':                 'Office 365 A1 for Students',
+  'STANDARDWOFFPACKPACK_STUDENT':         'Office 365 A3 for Students',
+  'ENTERPRISEPACKPLUS_STUDENT':           'Office 365 A5 for Students',
+  'STANDARDPACK_FACULTY':                 'Office 365 A1 for Faculty',
+  'STANDARDWOFFPACKPACK_FACULTY':         'Office 365 A3 for Faculty',
+  'ENTERPRISEPACKPLUS_FACULTY':           'Office 365 A5 for Faculty',
+
+  // ── Microsoft 365 Apps ──────────────────────────────────────────────────
+  'OFFICESUBSCRIPTION':                    'Microsoft 365 Apps for Enterprise',
+
+  // ── Exchange Online ─────────────────────────────────────────────────────
+  'EXCHANGESTANDARD':                      'Exchange Online (Plan 1)',
+  'EXCHANGEENTERPRISE':                    'Exchange Online (Plan 2)',
+  'EXCHANGE_S_ESSENTIALS':                'Exchange Online Essentials',
+  'EXCHANGEESSENTIALS':                    'Exchange Online Essentials',
+  'EXCHANGE_S_DESKLESS':                  'Exchange Online Kiosk',
+  'EXCHANGEDESKLESS':                      'Exchange Online Kiosk',
+  'EXCHANGEARCHIVE':                       'Exchange Online Archiving for Exchange Server',
+  'EXCHANGEARCHIVE_ADDON':                'Exchange Online Archiving for Exchange Online',
+  'EOP_ENTERPRISE':                        'Exchange Online Protection',
+
+  // ── SharePoint & OneDrive ───────────────────────────────────────────────
+  'SHAREPOINTSTANDARD':                    'SharePoint Online (Plan 1)',
+  'SHAREPOINTENTERPRISE':                  'SharePoint Online (Plan 2)',
+  'SHAREPOINT_S_DESKLESS':               'SharePoint Online Kiosk',
+  'ONEDRIVE_BASIC':                        'OneDrive for Business (Plan 1)',
+  'ONEDRIVE_ENTERPRISE':                  'OneDrive for Business (Plan 2)',
+  'WACONEDRIVEENTERPRISE':                'OneDrive for Business (Plan 2)',
+  'WACONEDRIVESTANDARD':                  'OneDrive for Business (Plan 1)',
+
+  // ── Teams & Voice ───────────────────────────────────────────────────────
+  'TEAMS_EXPLORATORY':                     'Microsoft Teams Exploratory',
+  'TEAMS_FREE':                            'Microsoft Teams Free',
+  'MCOEV':                                 'Microsoft 365 Phone System',
+  'MCOPSTN1':                              'Microsoft 365 Domestic Calling Plan',
+  'MCOPSTN2':                              'Microsoft 365 International Calling Plan',
+  'MCOMEETADV':                            'Microsoft 365 Audio Conferencing',
+  'MCOSTANDARD':                           'Skype for Business Online (Plan 2)',
+  'MCOLITE':                               'Skype for Business Online (Plan 1)',
+  'MCOVOICECONF':                          'Skype for Business Online (Plan 3)',
+
+  // ── Power Platform ──────────────────────────────────────────────────────
+  'FLOW_FREE':                             'Power Automate Free',
+  'FLOW_P1':                               'Power Automate Plan 1',
+  'FLOW_P2':                               'Power Automate Plan 2',
+  'POWERFLOW_P1':                          'Power Automate Plan 1',
+  'POWERFLOW_P2':                          'Power Automate Plan 2',
+  'POWERAPPS_VIRAL':                       'Microsoft Power Apps Plan 2 Trial',
+  'POWERAPPS_PER_USER':                   'Power Apps per User Plan',
+  'POWERAPPS_PER_APP':                    'Power Apps per App Plan',
+  'POWER_BI_STANDARD':                    'Power BI (Free)',
+  'POWER_BI_PRO':                          'Power BI Pro',
+  'POWER_BI_PREMIUM_PER_USER':            'Power BI Premium Per User',
+  'POWER_BI_PREMIUM_PER_USER_ADDON':      'Power BI Premium Per User Add-On',
+
+  // ── Dynamics 365 ────────────────────────────────────────────────────────
+  'DYN365_ENTERPRISE_P1':                 'Dynamics 365 Customer Engagement Plan',
+  'CRMPLAN2':                              'Microsoft Dynamics CRM Online Basic',
+  'CRMSTANDARD':                           'Microsoft Dynamics CRM Online',
+
+  // ── Security & Compliance ───────────────────────────────────────────────
+  'EMS':                                   'Enterprise Mobility + Security E3',
+  'EMSPREMIUM':                            'Enterprise Mobility + Security E5',
+  'AAD_PREMIUM':                           'Microsoft Entra ID P1',
+  'AAD_PREMIUM_P2':                        'Microsoft Entra ID P2',
+  'INTUNE_A':                              'Microsoft Intune Plan 1',
+  'INTUNE_A_D':                            'Microsoft Intune Plan 1 for Education',
+  'RMS_S_PREMIUM':                         'Azure Information Protection Premium P1',
+  'RMS_S_PREMIUM2':                        'Azure Information Protection Premium P2',
+  'ADALLOM_S_DISCOVERY':                  'Microsoft Defender for Cloud Apps',
+  'MFA_PREMIUM':                           'Microsoft Entra ID Multifactor Authentication',
+
+  // ── Project & Visio ─────────────────────────────────────────────────────
+  'PROJECTPREMIUM':                        'Project Plan 5',
+  'PROJECTPROFESSIONAL':                   'Project Plan 3',
+  'PROJECTESSENTIALS':                     'Project Plan 1',
+  'PROJECT_P1':                            'Project Plan 1',
+  'PROJECT_P2':                            'Project Plan 3',
+  'PROJECT_P3':                            'Project Plan 5',
+  'VISIOCLIENT':                           'Visio Plan 2',
+  'VISIOONLINE_PLAN1':                     'Visio Plan 1',
+  'VISIOONLINE_PLAN2':                     'Visio Plan 2',
+
+  // ── Developer ───────────────────────────────────────────────────────────
+  'DEVELOPERPACK':                         'Microsoft 365 E3 Developer',
+  'DEVELOPERPACK_E5':                      'Microsoft 365 E5 Developer',
+};
+
+/**
+ * Returns the friendly commercial name for a Microsoft 365 SKU part number.
+ * Falls back to the raw part number if no mapping is found.
+ */
+export function formatSKUName(skuPartNumber: string): string {
+  return M365_SKU_NAMES[skuPartNumber] ?? skuPartNumber;
+}
+
+export function exportLicensesToCSV(skus: SubscribedSku[], filename = 'license-report.csv') {
+  const headers = ['License Name', 'SKU Part Number', 'Assigned', 'Total', 'Available', 'Status'];
+  const escape = (v: string | number) => {
+    const s = String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  };
+  const rows = skus.map(s => {
+    const total = s.prepaidUnits.enabled + s.prepaidUnits.warning;
+    const available = Math.max(0, total - s.consumedUnits);
+    return [
+      escape(formatSKUName(s.skuPartNumber)),
+      escape(s.skuPartNumber),
+      escape(s.consumedUnits),
+      escape(total),
+      escape(available),
+      escape(s.capabilityStatus),
+    ].join(',');
+  });
   const csv = [headers.join(','), ...rows].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);

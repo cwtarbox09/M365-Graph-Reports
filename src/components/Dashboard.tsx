@@ -6,8 +6,8 @@ import {
   InteractionRequiredAuthError,
 } from '@azure/msal-browser';
 import type { AccountInfo } from '@azure/msal-browser';
-import { SignInLog, FilterState, DateRange } from '@/lib/types';
-import { processSignIn, computeStats, getOSLabel, exportToCSV, formatRiskLevel } from '@/lib/utils';
+import { SignInLog, FilterState, DateRange, SubscribedSku } from '@/lib/types';
+import { cn, processSignIn, computeStats, getOSLabel, exportToCSV, formatRiskLevel, formatSKUName, exportLicensesToCSV } from '@/lib/utils';
 import Navbar from './Navbar';
 import SummaryCards from './SummaryCards';
 import {
@@ -20,7 +20,6 @@ import FilterBar from './FilterBar';
 import SignInTable from './SignInTable';
 import CSVImportModal from './CSVImportModal';
 import { AlertCircle, Download, Loader2, RefreshCw, Shield, Upload } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { MSAL_CONFIG, GRAPH_SCOPES } from '@/lib/msalConfig';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -165,6 +164,80 @@ function RiskLevelTable({ signIns }: { signIns: SignInLog[] }) {
   );
 }
 
+// ─── License summary ──────────────────────────────────────────────────────────
+
+function LicenseSummary({ skus, onExport }: { skus: SubscribedSku[]; onExport: () => void }) {
+  if (skus.length === 0) return null;
+
+  const statusClass: Record<string, string> = {
+    Enabled:   'badge-green',
+    Warning:   'badge-yellow',
+    Suspended: 'badge-red',
+    Deleted:   'badge-gray',
+    LockedOut: 'badge-red',
+  };
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700">Subscribed Licenses</h3>
+          <p className="text-xs text-slate-400">{skus.length} license plan{skus.length !== 1 ? 's' : ''} in this tenant</p>
+        </div>
+        <button onClick={onExport} className="btn btn-secondary text-xs">
+          <Download className="w-3.5 h-3.5" />
+          Export CSV
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full data-table">
+          <thead className="bg-slate-50 border-b border-slate-100">
+            <tr>
+              <th>License Name</th>
+              <th>SKU</th>
+              <th>Assigned</th>
+              <th>Total</th>
+              <th>Available</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {skus.map(sku => {
+              const total     = sku.prepaidUnits.enabled + sku.prepaidUnits.warning;
+              const available = Math.max(0, total - sku.consumedUnits);
+              const pct       = total > 0 ? (sku.consumedUnits / total) * 100 : 0;
+              return (
+                <tr key={sku.id}>
+                  <td className="font-medium text-slate-800">{formatSKUName(sku.skuPartNumber)}</td>
+                  <td className="font-mono text-xs text-slate-400">{sku.skuPartNumber}</td>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <div className="w-20 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full', pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-blue-400')}
+                          style={{ width: `${Math.min(pct, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium text-slate-700">{sku.consumedUnits.toLocaleString()}</span>
+                    </div>
+                  </td>
+                  <td className="text-xs text-slate-600">{total.toLocaleString()}</td>
+                  <td className="text-xs text-slate-600">{available.toLocaleString()}</td>
+                  <td>
+                    <span className={cn('badge', statusClass[sku.capabilityStatus] ?? 'badge-gray')}>
+                      {sku.capabilityStatus}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── MSAL instance (module-level singleton) ───────────────────────────────────
 
 let msalInstance: PublicClientApplication | null = null;
@@ -198,6 +271,9 @@ export default function Dashboard() {
   // ── CSV Import state ───────────────────────────────────────────────────────
   const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [isImportedData, setIsImportedData] = useState(false);
+
+  // ── License state ──────────────────────────────────────────────────────────
+  const [licenses, setLicenses] = useState<SubscribedSku[]>([]);
 
   // ── Init MSAL on mount ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -344,12 +420,25 @@ export default function Dashboard() {
     }
   }, [getToken]);
 
-  // Reload when account signs in or date range changes
+  // Reload sign-ins when account signs in or date range changes
   useEffect(() => {
     if (!account || !msalReady) return;
     loadData(DAY_MAP[filters.dateRange]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, msalReady, filters.dateRange]);
+
+  // Fetch subscribed SKUs once on sign-in
+  useEffect(() => {
+    if (!account || !msalReady) return;
+    getToken()
+      .then(token => fetch('https://graph.microsoft.com/v1.0/subscribedSkus', {
+        headers: { Authorization: `Bearer ${token}` },
+      }))
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => setLicenses(data.value ?? []))
+      .catch(() => { /* non-fatal — licenses section just stays hidden */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, msalReady]);
 
   // Manual "load more"
   const handleLoadMore = useCallback(async () => {
@@ -594,6 +683,11 @@ export default function Dashboard() {
           <>
             <SummaryCards stats={stats} isLoadingMore={isLoadingMore} />
             <PolicyImpactCallout signIns={signIns} />
+
+            <LicenseSummary
+              skus={licenses}
+              onExport={() => exportLicensesToCSV(licenses, `license-report-${new Date().toISOString().slice(0, 10)}.csv`)}
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <CompliancePieChart stats={stats} />

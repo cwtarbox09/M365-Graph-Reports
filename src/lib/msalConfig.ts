@@ -2,7 +2,7 @@ import type { Configuration } from '@azure/msal-browser';
 import { LogLevel } from '@azure/msal-browser';
 import { AZURE_CLIENT_ID, AZURE_AUTHORITY } from '@/config';
 
-export const GRAPH_SCOPES = ['AuditLog.Read.All'];
+export const GRAPH_SCOPES = ['AuditLog.Read.All', 'Directory.Read.All'];
 
 export const MSAL_CONFIG: Configuration = {
   auth: {
