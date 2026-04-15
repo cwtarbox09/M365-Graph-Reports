@@ -98,6 +98,28 @@ export function policyStatusLabel(status: PolicyStatus): string {
   }
 }
 
+export function formatCAStatus(status: string | null | undefined): string {
+  switch (status) {
+    case 'success':            return 'Success';
+    case 'failure':            return 'Failure';
+    case 'notApplied':         return 'Not Applied';
+    case 'unknownFutureValue': return 'Unknown';
+    default:                   return status || '';
+  }
+}
+
+export function formatRiskLevel(level: string | null | undefined): string {
+  switch (level) {
+    case 'none':               return 'None';
+    case 'low':                return 'Low';
+    case 'medium':             return 'Medium';
+    case 'high':               return 'High';
+    case 'hidden':             return 'Hidden';
+    case 'unknownFutureValue': return 'Unknown';
+    default:                   return level || 'None';
+  }
+}
+
 export function deviceCategoryLabel(cat: DeviceCategory): string {
   switch (cat) {
     case 'entra-joined':        return 'Entra Joined';
@@ -322,8 +344,8 @@ export function exportToCSV(signIns: SignInLog[], filename = 'signin-report.csv'
     escape(policyStatusLabel(s.policyStatus)),
     escape(s.status.errorCode === 0 ? 'Success' : 'Failure'),
     escape(s.status.failureReason),
-    escape(s.conditionalAccessStatus),
-    escape(s.riskLevelAggregated),
+    escape(formatCAStatus(s.conditionalAccessStatus)),
+    escape(formatRiskLevel(s.riskLevelAggregated)),
     escape(s.ipAddress),
     escape(s.location.city),
     escape(s.location.countryOrRegion),

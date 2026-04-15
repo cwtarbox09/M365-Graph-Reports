@@ -13,7 +13,7 @@ import { useState, useCallback } from 'react';
 import { SignInLog } from '@/lib/types';
 import {
   cn, formatDate, formatTrustType, policyStatusLabel,
-  deviceCategoryLabel, getOSLabel, exportToCSV,
+  deviceCategoryLabel, getOSLabel, exportToCSV, formatCAStatus,
 } from '@/lib/utils';
 import {
   ChevronUp, ChevronDown, ChevronsUpDown,
@@ -137,7 +137,7 @@ const columns = [
           v === 'success' ? 'badge-green' :
           v === 'failure' ? 'badge-red' : 'badge-gray',
         )}>
-          {v}
+          {formatCAStatus(v)}
         </span>
       );
     },

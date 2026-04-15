@@ -7,7 +7,7 @@ import {
 } from '@azure/msal-browser';
 import type { AccountInfo } from '@azure/msal-browser';
 import { SignInLog, FilterState, DateRange } from '@/lib/types';
-import { processSignIn, computeStats, getOSLabel } from '@/lib/utils';
+import { processSignIn, computeStats, getOSLabel, exportToCSV, formatRiskLevel } from '@/lib/utils';
 import Navbar from './Navbar';
 import SummaryCards from './SummaryCards';
 import {
@@ -19,7 +19,7 @@ import {
 import FilterBar from './FilterBar';
 import SignInTable from './SignInTable';
 import CSVImportModal from './CSVImportModal';
-import { AlertCircle, Loader2, RefreshCw, Shield, Upload } from 'lucide-react';
+import { AlertCircle, Download, Loader2, RefreshCw, Shield, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MSAL_CONFIG, GRAPH_SCOPES } from '@/lib/msalConfig';
 
@@ -146,7 +146,7 @@ function RiskLevelTable({ signIns }: { signIns: SignInLog[] }) {
     <ul className="space-y-2">
       {rows.map(({ level, count }) => (
         <li key={level} className="flex items-center gap-3">
-          <span className={`badge capitalize ${badgeClass[level] ?? 'badge-gray'}`}>{level}</span>
+          <span className={`badge ${badgeClass[level] ?? 'badge-gray'}`}>{formatRiskLevel(level)}</span>
           <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
             <div
               className="h-full bg-blue-400 rounded-full"
@@ -544,14 +544,24 @@ export default function Dashboard() {
             </p>
           </div>
 
-          <button
-            onClick={() => loadData(DAY_MAP[filters.dateRange])}
-            disabled={isInitialLoad || isLoadingMore}
-            className="btn btn-secondary shrink-0"
-          >
-            <RefreshCw className={cn('w-4 h-4', (isInitialLoad || isLoadingMore) && 'animate-spin')} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => exportToCSV(filteredSignIns, `signin-report-${new Date().toISOString().slice(0, 10)}.csv`)}
+              disabled={filteredSignIns.length === 0}
+              className="btn btn-secondary"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+            <button
+              onClick={() => loadData(DAY_MAP[filters.dateRange])}
+              disabled={isInitialLoad || isLoadingMore}
+              className="btn btn-secondary"
+            >
+              <RefreshCw className={cn('w-4 h-4', (isInitialLoad || isLoadingMore) && 'animate-spin')} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* Loading */}
